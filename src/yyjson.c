@@ -5222,7 +5222,10 @@ read_double:
 static_inline bool read_string(u8 **ptr,
                                u8 *lst,
                                bool inv,
-                               yyjson_val *val,
+                               /* modified */
+                                //    yyjson_val *val,
+                                void* temp_string_buf,
+                               /* modified */
                                const char **msg) {
     /*
      Each unicode code point is encoded as 1 to 4 bytes in UTF-8 encoding,
@@ -5358,10 +5361,22 @@ static_inline bool read_string(u8 **ptr,
     
     u8 *cur = *ptr;
     u8 **end = ptr;
-    u8 *src = ++cur, *dst, *pos;
+    /* modified BEGIN */
+    // u8 *src = ++cur, *dst, *pos;
+    u8 *src = ++cur, *pos;
+    /* modified END */
     u16 hi, lo;
     u32 uni, tmp;
-    
+    /* modified BEGIN */
+    u8* const src_start = src;
+    size_t len_ucs1 = 0, len_ucs2 = 0, len_ucs4 = 0;
+    u8* dst = temp_string_buf;
+    u8 cur_max_ucs_size = 1;
+    u16* dst_ucs2;
+    u32* dst_ucs4;
+    bool is_ascii = true;
+    /* modified END */
+
 skip_ascii:
     /* Most strings have no escaped characters, so we can jump them quickly. */
     
@@ -5408,50 +5423,62 @@ skip_ascii_end:
     __asm__ volatile("":"=m"(*src));
 #endif
     if (likely(*src == '"')) {
-        val->tag = ((u64)(src - cur) << YYJSON_TAG_BIT) |
-                    (u64)(YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC);
-        val->uni.str = (const char *)cur;
-        *src = '\0';
-        *end = src + 1;
-        return true;
+        /* modified BEGIN */
+        // this is a fast path for ascii strings. directly copy the buffer to pyobject
+        return create_py_unicode(src_start, src - src_start, true, 1);
+        // val->tag = ((u64)(src - cur) << YYJSON_TAG_BIT) |
+        //             (u64)(YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC);
+        // val->uni.str = (const char *)cur;
+        // *src = '\0';
+        // *end = src + 1;
+        // return true;
+    } else {
+        memcpy(temp_string_buf, src_start, src - src_start);
+        len_ucs1 = src - src_start;
     }
-    
-skip_utf8:
-    if (*src & 0x80) { /* non-ASCII character */
-        /*
-         Non-ASCII character appears here, which means that the text is likely
-         to be written in non-English or emoticons. According to some common
-         data set statistics, byte sequences of the same length may appear
-         consecutively. We process the byte sequences of the same length in each
-         loop, which is more friendly to branch prediction.
-         */
-        pos = src;
+    /* modified END */
 
-        while (true) repeat8({
-            if (likely((*src & 0xF0) == 0xE0)) src += 3;
-            else break;
-        })
-        if (*src < 0x80) goto skip_ascii;
-        while (true) repeat8({
-            if (likely((*src & 0xE0) == 0xC0)) src += 2;
-            else break;
-        })
-        while (true) repeat8({
-            if (likely((*src & 0xF8) == 0xF0)) src += 4;
-            else break;
-        })
+    /* modified BEGIN */    
+// skip_utf8:
+//     if (*src & 0x80) { /* non-ASCII character */
+//         /*
+//          Non-ASCII character appears here, which means that the text is likely
+//          to be written in non-English or emoticons. According to some common
+//          data set statistics, byte sequences of the same length may appear
+//          consecutively. We process the byte sequences of the same length in each
+//          loop, which is more friendly to branch prediction.
+//          */
+//         pos = src;
 
-        if (unlikely(pos == src)) {
-            if (!inv) return_err(src, "invalid UTF-8 encoding in string");
-            ++src;
-        }
-        goto skip_ascii;
-    }
+//         while (true) repeat8({
+//             if (likely((*src & 0xF0) == 0xE0)) src += 3;
+//             else break;
+//         })
+//         if (*src < 0x80) goto skip_ascii;
+//         while (true) repeat8({
+//             if (likely((*src & 0xE0) == 0xC0)) src += 2;
+//             else break;
+//         })
+//         while (true) repeat8({
+//             if (likely((*src & 0xF8) == 0xF0)) src += 4;
+//             else break;
+//         })
+
+//         if (unlikely(pos == src)) {
+//             if (!inv) return_err(src, "invalid UTF-8 encoding in string");
+//             ++src;
+//         }
+//         goto skip_ascii;
+//     }
     
     /* The escape character appears, we need to copy it. */
-    dst = src;
-copy_escape:
-    if (likely(*src == '\\')) {
+    // dst = src;
+    /* modified END */
+
+    /* modified BEGIN */
+copy_escape_ucs1:
+    if (unlikely(*src == '\\')) {
+    /* modified END */
         switch (*++src) {
             case '"':  *dst++ = '"';  src++; break;
             case '\\': *dst++ = '\\'; src++; break;
@@ -5468,16 +5495,30 @@ copy_escape:
                 src += 4;
                 if (likely((hi & 0xF800) != 0xD800)) {
                     /* a BMP character */
-                    if (hi >= 0x800) {
-                        *dst++ = (u8)(0xE0 | (hi >> 12));
-                        *dst++ = (u8)(0x80 | ((hi >> 6) & 0x3F));
-                        *dst++ = (u8)(0x80 | (hi & 0x3F));
-                    } else if (hi >= 0x80) {
-                        *dst++ = (u8)(0xC0 | (hi >> 6));
-                        *dst++ = (u8)(0x80 | (hi & 0x3F));
+                    /* modified BEGIN */
+                    if (hi >= 0x100) {
+                        // BEGIN ucs1 -> ucs2
+                        assert(cur_max_ucs_size == 1);
+                        len_ucs1 = dst - (u8*)temp_string_buf;
+                        dst_ucs2 = ((u16*)temp_string_buf) + len_ucs1;
+                        cur_max_ucs_size = 2;
+                        // END ucs1 -> ucs2
+                        *dst_ucs2++ = hi;
                     } else {
+                        if (hi >= 0x80) is_ascii = false;  // latin1
                         *dst++ = (u8)hi;
                     }
+                    // if (hi >= 0x800) {
+                    //     *dst++ = (u8)(0xE0 | (hi >> 12));
+                    //     *dst++ = (u8)(0x80 | ((hi >> 6) & 0x3F));
+                    //     *dst++ = (u8)(0x80 | (hi & 0x3F));
+                    // } else if (hi >= 0x80) {
+                    //     *dst++ = (u8)(0xC0 | (hi >> 6));
+                    //     *dst++ = (u8)(0x80 | (hi & 0x3F));
+                    // } else {
+                    //     *dst++ = (u8)hi;
+                    // }
+                    /* modified END */
                 } else {
                     /* a non-BMP character, represented as a surrogate pair */
                     if (unlikely((hi & 0xFC00) != 0xD800)) {
@@ -5494,24 +5535,40 @@ copy_escape:
                     }
                     uni = ((((u32)hi - 0xD800) << 10) |
                             ((u32)lo - 0xDC00)) + 0x10000;
-                    *dst++ = (u8)(0xF0 | (uni >> 18));
-                    *dst++ = (u8)(0x80 | ((uni >> 12) & 0x3F));
-                    *dst++ = (u8)(0x80 | ((uni >> 6) & 0x3F));
-                    *dst++ = (u8)(0x80 | (uni & 0x3F));
+                    /* modified BEGIN */
+                    // BEGIN ucs1 -> ucs4
+                    assert(cur_max_ucs_size == 1);
+                    len_ucs1 = dst - (u8*)temp_string_buf;
+                    dst_ucs4 = ((u32*)temp_string_buf) + len_ucs1;
+                    cur_max_ucs_size = 4;
+                    // END ucs1 -> ucs4
+                    *dst_ucs4++ = uni;
+                    // *dst++ = (u8)(0xF0 | (uni >> 18));
+                    // *dst++ = (u8)(0x80 | ((uni >> 12) & 0x3F));
+                    // *dst++ = (u8)(0x80 | ((uni >> 6) & 0x3F));
+                    // *dst++ = (u8)(0x80 | (uni & 0x3F));
+                    /* modified END */
                     src += 6;
                 }
                 break;
             default: return_err(src, "invalid escaped character in string");
         }
-    } else if (likely(*src == '"')) {
-        val->tag = ((u64)(dst - cur) << YYJSON_TAG_BIT) | YYJSON_TYPE_STR;
-        val->uni.str = (const char *)cur;
-        *dst = '\0';
-        *end = src + 1;
-        return true;
+        /* modified BEGIN */
+    } else if (unlikely(*src == '"')) {
+        goto read_finalize;
+        // val->tag = ((u64)(dst - cur) << YYJSON_TAG_BIT) | YYJSON_TYPE_STR;
+        // val->uni.str = (const char *)cur;
+        // *dst = '\0';
+        // *end = src + 1;
+        // return true;
+        /* modified END */
     } else {
         if (!inv) return_err(src, "unexpected control character in string");
         if (src >= lst) return_err(src, "unclosed string");
+        /* modified BEGIN */
+        // assert this is a ascii character
+        assert(!(*src & 0x80));
+        /* modified END */
         *dst++ = *src++;
     }
     
