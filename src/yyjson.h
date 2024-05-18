@@ -41,7 +41,7 @@
 #include <limits.h>
 #include <string.h>
 #include <float.h>
-
+#include <pytypedefs.h>
 
 
 /*==============================================================================
@@ -884,7 +884,7 @@ yyjson_api bool yyjson_locate_pos(const char *str, size_t len, size_t pos,
  @return A new JSON document, or NULL if an error occurs.
     When it's no longer needed, it should be freed with `yyjson_doc_free()`.
  */
-yyjson_api yyjson_doc *yyjson_read_opts(char *dat,
+yyjson_api PyObject *yyjson_read_opts(char *dat,
                                         size_t len,
                                         yyjson_read_flag flg,
                                         const yyjson_alc *alc,
@@ -951,7 +951,7 @@ yyjson_api yyjson_doc *yyjson_read_fp(FILE *fp,
  @return A new JSON document, or NULL if an error occurs.
     When it's no longer needed, it should be freed with `yyjson_doc_free()`.
  */
-yyjson_api_inline yyjson_doc *yyjson_read(const char *dat,
+yyjson_api_inline PyObject *yyjson_read(const char *dat,
                                           size_t len,
                                           yyjson_read_flag flg) {
     flg &= ~YYJSON_READ_INSITU; /* const string cannot be modified */

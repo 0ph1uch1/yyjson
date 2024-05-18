@@ -21,6 +21,8 @@
  *============================================================================*/
 
 #include "yyjson.h"
+
+#include <assert.h>
 #include <math.h>
 
 
@@ -5746,7 +5748,7 @@ copy_utf8:
  *============================================================================*/
 
 /** Read single value JSON document. */
-static_noinline yyjson_doc *read_root_single(u8 *hdr,
+static_noinline PyObject *read_root_single(u8 *hdr,
                                              u8 *cur,
                                              u8 *end,
                                              yyjson_alc alc,
@@ -5763,59 +5765,63 @@ static_noinline yyjson_doc *read_root_single(u8 *hdr,
         err->code = YYJSON_READ_ERROR_##_code; \
         err->msg = _msg; \
     } \
-    if (val_hdr) alc.free(alc.ctx, (void *)val_hdr); \
     return NULL; \
 } while (false)
     
-    usize hdr_len; /* value count used by doc */
-    usize alc_num; /* value count capacity */
-    yyjson_val *val_hdr; /* the head of allocated values */
-    yyjson_val *val; /* current value */
-    yyjson_doc *doc; /* the JSON document, equals to val_hdr */
+    // usize hdr_len; /* value count used by doc */
+    // usize alc_num; /* value count capacity */
+    // yyjson_val *val_hdr; /* the head of allocated values */
+    PyObject *val; /* current value */
+    // yyjson_doc *doc; /* the JSON document, equals to val_hdr */
     const char *msg; /* error message */
     
-    bool raw; /* read number as raw */
+    // bool raw; /* read number as raw */
     bool inv; /* allow invalid unicode */
-    u8 *raw_end; /* raw end for null-terminator */
-    u8 **pre; /* previous raw end pointer */
+    // u8 *raw_end; /* raw end for null-terminator */
+    // u8 **pre; /* previous raw end pointer */
     
-    hdr_len = sizeof(yyjson_doc) / sizeof(yyjson_val);
-    hdr_len += (sizeof(yyjson_doc) % sizeof(yyjson_val)) > 0;
-    alc_num = hdr_len + 1; /* single value */
+    // hdr_len = sizeof(yyjson_doc) / sizeof(yyjson_val);
+    // hdr_len += (sizeof(yyjson_doc) % sizeof(yyjson_val)) > 0;
+    // alc_num = hdr_len + 1; /* single value */
     
-    val_hdr = (yyjson_val *)alc.malloc(alc.ctx, alc_num * sizeof(yyjson_val));
-    if (unlikely(!val_hdr)) goto fail_alloc;
-    val = val_hdr + hdr_len;
-    raw = has_read_flag(NUMBER_AS_RAW) || has_read_flag(BIGNUM_AS_RAW);
+    // val_hdr = (yyjson_val *)alc.malloc(alc.ctx, alc_num * sizeof(yyjson_val));
+    // if (unlikely(!val_hdr)) goto fail_alloc;
+    // val = val_hdr + hdr_len;
+    // raw = has_read_flag(NUMBER_AS_RAW) || has_read_flag(BIGNUM_AS_RAW);
     inv = has_read_flag(ALLOW_INVALID_UNICODE) != 0;
-    raw_end = NULL;
-    pre = raw ? &raw_end : NULL;
+    // raw_end = NULL;
+    // pre = raw ? &raw_end : NULL;
     
     if (char_is_number(*cur)) {
-        if (likely(read_number(&cur, pre, flg, val, &msg))) goto doc_end;
+        assert(false);
+        // if (likely(read_number(&cur, pre, flg, val, &msg))) goto doc_end;
         goto fail_number;
     }
     if (*cur == '"') {
-        if (likely(read_string(&cur, end, inv, val, &msg))) goto doc_end;
+        if (likely(read_string(&cur, end, inv, &val, &msg, hdr))) goto doc_end;
         goto fail_string;
     }
     if (*cur == 't') {
-        if (likely(read_true(&cur, val))) goto doc_end;
+        assert(false);
+        // if (likely(read_true(&cur, val))) goto doc_end;
         goto fail_literal_true;
     }
     if (*cur == 'f') {
-        if (likely(read_false(&cur, val))) goto doc_end;
+        assert(false);
+        // if (likely(read_false(&cur, val))) goto doc_end;
         goto fail_literal_false;
     }
     if (*cur == 'n') {
-        if (likely(read_null(&cur, val))) goto doc_end;
-        if (has_read_flag(ALLOW_INF_AND_NAN)) {
-            if (read_nan(false, &cur, pre, val)) goto doc_end;
-        }
+        assert(false);
+        // if (likely(read_null(&cur, val))) goto doc_end;
+        // if (has_read_flag(ALLOW_INF_AND_NAN)) {
+        //     if (read_nan(false, &cur, pre, val)) goto doc_end;
+        // }
         goto fail_literal_null;
     }
     if (has_read_flag(ALLOW_INF_AND_NAN)) {
-        if (read_inf_or_nan(false, &cur, pre, val)) goto doc_end;
+        assert(false);
+        // if (read_inf_or_nan(false, &cur, pre, val)) goto doc_end;
     }
     goto fail_character;
     
@@ -5832,14 +5838,15 @@ doc_end:
         if (unlikely(cur < end)) goto fail_garbage;
     }
     
-    if (pre && *pre) **pre = '\0';
-    doc = (yyjson_doc *)val_hdr;
-    doc->root = val_hdr + hdr_len;
-    doc->alc = alc;
-    doc->dat_read = (usize)(cur - hdr);
-    doc->val_read = 1;
-    doc->str_pool = has_read_flag(INSITU) ? NULL : (char *)hdr;
-    return doc;
+    // if (pre && *pre) **pre = '\0';
+    // TODO need to free
+    // doc = (yyjson_doc *)val_hdr;
+    // doc->root = val_hdr + hdr_len;
+    // doc->alc = alc;
+    // doc->dat_read = (usize)(cur - hdr);
+    // doc->val_read = 1;
+    // doc->str_pool = has_read_flag(INSITU) ? NULL : (char *)hdr;
+    return val;
     
 fail_string:
     return_err(cur, INVALID_STRING, msg);
@@ -6741,7 +6748,7 @@ fail_garbage:
  * JSON Reader Entrance
  *============================================================================*/
 
-yyjson_doc *yyjson_read_opts(char *dat,
+PyObject *yyjson_read_opts(char *dat,
                              usize len,
                              yyjson_read_flag flg,
                              const yyjson_alc *alc_ptr,
@@ -6757,7 +6764,7 @@ yyjson_doc *yyjson_read_opts(char *dat,
     
     yyjson_read_err dummy_err;
     yyjson_alc alc;
-    yyjson_doc *doc;
+    PyObject *doc;
     u8 *hdr = NULL, *end, *cur;
     
     /* validate input parameters */
@@ -6776,6 +6783,7 @@ yyjson_doc *yyjson_read_opts(char *dat,
     
     /* add 4-byte zero padding for input data if necessary */
     if (has_read_flag(INSITU)) {
+        assert(false);
         hdr = (u8 *)dat;
         end = (u8 *)dat + len;
         cur = (u8 *)dat;
@@ -6783,14 +6791,14 @@ yyjson_doc *yyjson_read_opts(char *dat,
         if (unlikely(len >= USIZE_MAX - YYJSON_PADDING_SIZE)) {
             return_err(0, MEMORY_ALLOCATION, "memory allocation failed");
         }
-        hdr = (u8 *)alc.malloc(alc.ctx, len + YYJSON_PADDING_SIZE);
+        hdr = (u8 *)alc.malloc(alc.ctx, len * 5);
         if (unlikely(!hdr)) {
             return_err(0, MEMORY_ALLOCATION, "memory allocation failed");
         }
-        end = hdr + len;
+        end = hdr + len * 5;
         cur = hdr;
-        memcpy(hdr, dat, len);
-        memset(end, 0, YYJSON_PADDING_SIZE);
+        // memcpy(hdr, dat, len);
+        memset(end, 0, len * 5);
     }
     
     /* skip empty contents before json document */
@@ -6813,9 +6821,11 @@ yyjson_doc *yyjson_read_opts(char *dat,
     /* read json document */
     if (likely(char_is_container(*cur))) {
         if (char_is_space(cur[1]) && char_is_space(cur[2])) {
-            doc = read_root_pretty(hdr, cur, end, alc, flg, err);
+            assert(false);
+            // doc = read_root_pretty(hdr, cur, end, alc, flg, err);
         } else {
-            doc = read_root_minify(hdr, cur, end, alc, flg, err);
+            assert(false);
+            // doc = read_root_minify(hdr, cur, end, alc, flg, err);
         }
     } else {
         doc = read_root_single(hdr, cur, end, alc, flg, err);
