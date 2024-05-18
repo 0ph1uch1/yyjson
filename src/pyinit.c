@@ -102,14 +102,18 @@ PyMODINIT_FUNC PyInit_pyyjson(void)
 
 PyObject *pyyjson_Decode(PyObject *self, PyObject *args, PyObject *kwargs)
 {
-    char *string = NULL;
+    const char *string = NULL;
+    size_t len = 0;
     static const char *kwlist[] = {"s", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#", (char **)kwlist, &string))
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#", (char **)kwlist, &string, &len))
     {
         PyErr_SetString(JSONDecodeError, "Invalid argument");
         goto fail;
     }
     // TODO
+    PyObject *root = yyjson_read(string, len, YYJSON_READ_NOFLAG);
+    assert(root);
+    return root;
 
 fail:
     if (!PyErr_Occurred())
