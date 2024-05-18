@@ -72,10 +72,10 @@ endif()
 #     add_definitions(-DYYJSON_DISABLE_UNALIGNED_MEMORY_ACCESS)
 # endif()
 
-add_definitions(-DYYJSON_DISABLE_NON_STANDARD)
-add_definitions(-DYYJSON_DISABLE_UTF8_VALIDATION)
-add_definitions(-DYYJSON_DISABLE_UTILS)
-add_definitions(-DYYJSON_DISABLE_WRITER)
+add_definitions(-DYYJSON_DISABLE_NON_STANDARD=1)
+add_definitions(-DYYJSON_DISABLE_UTF8_VALIDATION=1)
+add_definitions(-DYYJSON_DISABLE_UTILS=1)
+add_definitions(-DYYJSON_DISABLE_WRITER=1)
 
 
 # ------------------------------------------------------------------------------
