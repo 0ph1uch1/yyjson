@@ -5252,7 +5252,7 @@ static_inline u32 read_b4_unicode(u32 uni) {
 static_inline bool read_string(u8 **ptr,
                                u8 *lst,
                                /* modified */
-                                //    bool inv,
+                                bool inv,  // TODO drop this
                                 //    yyjson_val *val,
                                 void* temp_string_buf,
                                /* modified */
@@ -5535,9 +5535,11 @@ copy_escape_ucs1:
                         cur_max_ucs_size = 2;
                         // END ucs1 -> ucs2
                         *dst_ucs2++ = hi;
+                        goto copy_ascii_ucs2;
                     } else {
                         if (hi >= 0x80) is_ascii = false;  // latin1
                         *dst++ = (u8)hi;
+                        goto copy_ascii_ucs1;
                     }
                     // if (hi >= 0x800) {
                     //     *dst++ = (u8)(0xE0 | (hi >> 12));
@@ -5578,12 +5580,16 @@ copy_escape_ucs1:
                     // *dst++ = (u8)(0x80 | ((uni >> 12) & 0x3F));
                     // *dst++ = (u8)(0x80 | ((uni >> 6) & 0x3F));
                     // *dst++ = (u8)(0x80 | (uni & 0x3F));
-                    /* modified END */
                     src += 6;
+                    goto copy_ascii_ucs4;
+                    /* modified END */
                 }
                 break;
             default: return_err(src, "invalid escaped character in string");
         }
+        /* modified BEGIN */
+        goto copy_ascii_ucs1;
+        /* modified END */
         /* modified BEGIN */
     } else if (likely(*src == '"')) {
         goto read_finalize;
@@ -5601,6 +5607,7 @@ copy_escape_ucs1:
         // *dst++ = *src++;
         /* modified END */
     }
+    assert(false);
 
     /* modified BEGIN */
 copy_ascii_ucs1:
@@ -5614,15 +5621,15 @@ copy_ascii_ucs1:
          })
      */
 #if YYJSON_IS_REAL_GCC
+    /* modified BEGIN */
 #   define expr_jump(i) \
     if (likely(!(char_is_ascii_stop(src[i])))) {} \
-    /* modified BEGIN */
     else { __asm__ volatile("":"=m"(src[i])); goto copy_ascii_ucs1_stop_##i; }
     /* modified END */
 #else
+    /* modified BEGIN */
 #   define expr_jump(i) \
     if (likely(!(char_is_ascii_stop(src[i])))) {} \
-    /* modified BEGIN */
     else { goto copy_ascii_ucs1_stop_##i; }
     /* modified END */
 #endif
@@ -5760,6 +5767,9 @@ copy_ascii_ucs1_stop_15:
     goto copy_utf8_ucs1;
     /* modified END */
     
+
+
+
     /* modified BEGIN */
 copy_utf8_ucs1:
     assert(cur_max_ucs_size==1);
@@ -5789,7 +5799,7 @@ copy_utf8_ucs1:
                 /* modified END */
             } else break;
         })
-        if ((uni & b1_mask) == b1_patt) goto copy_ascii;
+        if ((uni & b1_mask) == b1_patt) goto copy_ascii_ucs1;
         while (true) repeat4({
             if ((uni & b2_mask) == b2_patt) {
                 /* modified BEGIN */
@@ -5857,6 +5867,412 @@ copy_utf8_ucs1:
     goto copy_escape_ucs1;
     /* modified END */
     
+
+    /* modified BEGIN */
+copy_escape_ucs2:
+    assert(cur_max_ucs_size==2);
+    if (likely(*src == '\\')) {
+    /* modified END */
+        switch (*++src) {
+            case '"':  *dst_ucs2++ = '"';  src++; break;
+            case '\\': *dst_ucs2++ = '\\'; src++; break;
+            case '/':  *dst_ucs2++ = '/';  src++; break;
+            case 'b':  *dst_ucs2++ = '\b'; src++; break;
+            case 'f':  *dst_ucs2++ = '\f'; src++; break;
+            case 'n':  *dst_ucs2++ = '\n'; src++; break;
+            case 'r':  *dst_ucs2++ = '\r'; src++; break;
+            case 't':  *dst_ucs2++ = '\t'; src++; break;
+            case 'u':
+                if (unlikely(!read_hex_u16(++src, &hi))) {
+                    return_err(src - 2, "invalid escaped sequence in string");
+                }
+                src += 4;
+                if (likely((hi & 0xF800) != 0xD800)) {
+                    /* a BMP character */
+                    /* modified BEGIN */
+                    *dst_ucs2++ = hi;
+                    goto copy_ascii_ucs2;
+                    // if (hi >= 0x800) {
+                    //     *dst++ = (u8)(0xE0 | (hi >> 12));
+                    //     *dst++ = (u8)(0x80 | ((hi >> 6) & 0x3F));
+                    //     *dst++ = (u8)(0x80 | (hi & 0x3F));
+                    // } else if (hi >= 0x80) {
+                    //     *dst++ = (u8)(0xC0 | (hi >> 6));
+                    //     *dst++ = (u8)(0x80 | (hi & 0x3F));
+                    // } else {
+                    //     *dst++ = (u8)hi;
+                    // }
+                    /* modified END */
+                } else {
+                    /* a non-BMP character, represented as a surrogate pair */
+                    if (unlikely((hi & 0xFC00) != 0xD800)) {
+                        return_err(src - 6, "invalid high surrogate in string");
+                    }
+                    if (unlikely(!byte_match_2(src, "\\u"))) {
+                        return_err(src, "no low surrogate in string");
+                    }
+                    if (unlikely(!read_hex_u16(src + 2, &lo))) {
+                        return_err(src, "invalid escaped sequence in string");
+                    }
+                    if (unlikely((lo & 0xFC00) != 0xDC00)) {
+                        return_err(src, "invalid low surrogate in string");
+                    }
+                    uni = ((((u32)hi - 0xD800) << 10) |
+                            ((u32)lo - 0xDC00)) + 0x10000;
+                    /* modified BEGIN */
+                    // BEGIN ucs2 -> ucs4
+                    assert(cur_max_ucs_size == 2);
+                    len_ucs2 = dst_ucs2 - (u16*)temp_string_buf - len_ucs1;
+                    dst_ucs4 = ((u32*)temp_string_buf) + len_ucs1 + len_ucs2;
+                    cur_max_ucs_size = 4;
+                    // END ucs2 -> ucs4
+                    *dst_ucs4++ = uni;
+                    // *dst++ = (u8)(0xF0 | (uni >> 18));
+                    // *dst++ = (u8)(0x80 | ((uni >> 12) & 0x3F));
+                    // *dst++ = (u8)(0x80 | ((uni >> 6) & 0x3F));
+                    // *dst++ = (u8)(0x80 | (uni & 0x3F));
+                    src += 6;
+                    goto copy_ascii_ucs4;
+                    /* modified END */
+                }
+                break;
+            default: return_err(src, "invalid escaped character in string");
+        }
+        /* modified BEGIN */
+        goto copy_ascii_ucs2;
+        /* modified END */
+        /* modified BEGIN */
+    } else if (likely(*src == '"')) {
+        goto read_finalize;
+        // val->tag = ((u64)(dst - cur) << YYJSON_TAG_BIT) | YYJSON_TYPE_STR;
+        // val->uni.str = (const char *)cur;
+        // *dst = '\0';
+        // *end = src + 1;
+        // return true;
+        /* modified END */
+    } else {
+        /* modified BEGIN */
+        return_err(src, "unexpected control character in string");
+        // if (!inv) return_err(src, "unexpected control character in string");
+        // if (src >= lst) return_err(src, "unclosed string");
+        // *dst++ = *src++;
+        /* modified END */
+    }
+    assert(false);
+
+
+
+
+
+    /* modified BEGIN */
+copy_ascii_ucs2:
+    assert(cur_max_ucs_size==2);
+    while (true) repeat16({
+        if (unlikely(char_is_ascii_stop(*src))) break;
+        *dst_ucs2++ = *src++;
+    })
+    /* modified END */
+
+
+
+
+    /* modified BEGIN */
+copy_utf8_ucs2:
+    assert(cur_max_ucs_size==2);
+    /* modified END */
+    if (*src & 0x80) { /* non-ASCII character */
+        pos = src;
+        uni = byte_load_4(src);
+        // TODO remove the repeat4 later
+        while (true) repeat4({
+            if ((uni & b3_mask) == b3_patt) {
+                /* modified BEGIN */
+                // code point: [U+0800, U+FFFF]
+                assert(cur_max_ucs_size == 2);
+                // write
+                *dst_ucs2++ = read_b3_unicode(uni);
+                // byte_copy_4(dst, &uni);
+                // dst += 3;
+                // move src and load
+                src += 3;
+                // goto copy_utf8_ucs2;
+                uni = byte_load_4(src);
+                /* modified END */
+            } else break;
+        })
+        if ((uni & b1_mask) == b1_patt) goto copy_ascii_ucs2;
+        while (true) repeat4({
+            if ((uni & b2_mask) == b2_patt) {
+                /* modified BEGIN */
+                assert(cur_max_ucs_size == 2);
+                u16 to_write = read_b2_unicode(uni);
+                *dst_ucs2++ = to_write;
+                src += 2;
+                uni = byte_load_4(src);
+                // if (likely(to_write >= 0x100)) {
+                //     // UCS2
+                //     // write
+                //     *dst_ucs2++ = to_write;
+                //     // move src and load
+                //     src += 2;
+                //     goto copy_utf8_ucs2;
+                //     // uni = byte_load_4(src);
+                // } else {
+                //     // write
+                //     *dst_ucs2++ = (u8)to_write;
+                //     // move src and load
+                //     src += 2;
+                //     // still ascii, no need goto
+                //     uni = byte_load_4(src);
+                // }
+                // code point: [U+0080, U+07FF], latin1 or ucs2
+                // byte_copy_2(dst, &uni);
+                // dst += 2;
+                /* modified END */
+            } else break;
+        })
+        while (true) repeat4({
+            if ((uni & b4_mask) == b4_patt) {
+                /* modified BEGIN */
+                // code point: [U+10000, U+10FFFF]
+                // must be ucs4
+                // BEGIN ucs2 -> ucs4
+                assert(cur_max_ucs_size == 2);
+                len_ucs2 = dst_ucs2 - (u16*)temp_string_buf - len_ucs1;
+                dst_ucs4 = ((u32*)temp_string_buf) + len_ucs1 + len_ucs2;
+                cur_max_ucs_size = 4;
+                // END ucs2 -> ucs4
+                *dst_ucs4++ = read_b4_unicode(uni);
+                // byte_copy_4(dst, &uni);
+                // dst += 4;
+                src += 4;
+                goto copy_utf8_ucs4;
+                // uni = byte_load_4(src);
+                /* modified END */
+            } else break;
+        })
+
+        /* modified BEGIN */
+        // if (unlikely(pos == src)) {
+        //     if (!inv) return_err(src, "invalid UTF-8 encoding in string");
+        //     goto copy_ascii_stop_1;
+        // }
+        goto copy_ascii_ucs2;
+        /* modified END */
+    }
+    /* modified BEGIN */
+    goto copy_escape_ucs2;
+    /* modified END */
+    
+
+    /* modified BEGIN */
+copy_escape_ucs4:
+    assert(cur_max_ucs_size==4);
+    if (likely(*src == '\\')) {
+    /* modified END */
+        switch (*++src) {
+            case '"':  *dst_ucs4++ = '"';  src++; break;
+            case '\\': *dst_ucs4++ = '\\'; src++; break;
+            case '/':  *dst_ucs4++ = '/';  src++; break;
+            case 'b':  *dst_ucs4++ = '\b'; src++; break;
+            case 'f':  *dst_ucs4++ = '\f'; src++; break;
+            case 'n':  *dst_ucs4++ = '\n'; src++; break;
+            case 'r':  *dst_ucs4++ = '\r'; src++; break;
+            case 't':  *dst_ucs4++ = '\t'; src++; break;
+            case 'u':
+                if (unlikely(!read_hex_u16(++src, &hi))) {
+                    return_err(src - 2, "invalid escaped sequence in string");
+                }
+                src += 4;
+                if (likely((hi & 0xF800) != 0xD800)) {
+                    /* a BMP character */
+                    /* modified BEGIN */
+                    *dst_ucs4++ = hi;
+                    goto copy_ascii_ucs4;
+                    // if (hi >= 0x800) {
+                    //     *dst++ = (u8)(0xE0 | (hi >> 12));
+                    //     *dst++ = (u8)(0x80 | ((hi >> 6) & 0x3F));
+                    //     *dst++ = (u8)(0x80 | (hi & 0x3F));
+                    // } else if (hi >= 0x80) {
+                    //     *dst++ = (u8)(0xC0 | (hi >> 6));
+                    //     *dst++ = (u8)(0x80 | (hi & 0x3F));
+                    // } else {
+                    //     *dst++ = (u8)hi;
+                    // }
+                    /* modified END */
+                } else {
+                    /* a non-BMP character, represented as a surrogate pair */
+                    if (unlikely((hi & 0xFC00) != 0xD800)) {
+                        return_err(src - 6, "invalid high surrogate in string");
+                    }
+                    if (unlikely(!byte_match_2(src, "\\u"))) {
+                        return_err(src, "no low surrogate in string");
+                    }
+                    if (unlikely(!read_hex_u16(src + 2, &lo))) {
+                        return_err(src, "invalid escaped sequence in string");
+                    }
+                    if (unlikely((lo & 0xFC00) != 0xDC00)) {
+                        return_err(src, "invalid low surrogate in string");
+                    }
+                    uni = ((((u32)hi - 0xD800) << 10) |
+                            ((u32)lo - 0xDC00)) + 0x10000;
+                    /* modified BEGIN */
+                    
+                    // END ucs2 -> ucs4
+                    *dst_ucs4++ = uni;
+                    // *dst++ = (u8)(0xF0 | (uni >> 18));
+                    // *dst++ = (u8)(0x80 | ((uni >> 12) & 0x3F));
+                    // *dst++ = (u8)(0x80 | ((uni >> 6) & 0x3F));
+                    // *dst++ = (u8)(0x80 | (uni & 0x3F));
+                    src += 6;
+                    goto copy_ascii_ucs4;
+                    /* modified END */
+                }
+                break;
+            default: return_err(src, "invalid escaped character in string");
+        }
+        /* modified BEGIN */
+        goto copy_ascii_ucs4;
+        /* modified END */
+        /* modified BEGIN */
+    } else if (likely(*src == '"')) {
+        goto read_finalize;
+        // val->tag = ((u64)(dst - cur) << YYJSON_TAG_BIT) | YYJSON_TYPE_STR;
+        // val->uni.str = (const char *)cur;
+        // *dst = '\0';
+        // *end = src + 1;
+        // return true;
+        /* modified END */
+    } else {
+        /* modified BEGIN */
+        return_err(src, "unexpected control character in string");
+        // if (!inv) return_err(src, "unexpected control character in string");
+        // if (src >= lst) return_err(src, "unclosed string");
+        // *dst++ = *src++;
+        /* modified END */
+    }
+    assert(false);
+
+
+    /* modified BEGIN */
+copy_ascii_ucs4:
+    assert(cur_max_ucs_size==4);
+    while (true) repeat16({
+        if (unlikely(char_is_ascii_stop(*src))) break;
+        *dst_ucs4++ = *src++;
+    })
+    /* modified END */
+
+
+
+
+    /* modified BEGIN */
+copy_utf8_ucs4:
+    assert(cur_max_ucs_size==4);
+    /* modified END */
+    if (*src & 0x80) { /* non-ASCII character */
+        pos = src;
+        uni = byte_load_4(src);
+        // TODO remove the repeat4 later
+        while (true) repeat4({
+            if ((uni & b3_mask) == b3_patt) {
+                /* modified BEGIN */
+                // code point: [U+0800, U+FFFF]
+                assert(cur_max_ucs_size == 4);
+                // write
+                *dst_ucs4++ = read_b3_unicode(uni);
+                // byte_copy_4(dst, &uni);
+                // dst += 3;
+                // move src and load
+                src += 3;
+                // goto copy_utf8_ucs2;
+                uni = byte_load_4(src);
+                /* modified END */
+            } else break;
+        })
+        if ((uni & b1_mask) == b1_patt) goto copy_ascii_ucs4;
+        while (true) repeat4({
+            if ((uni & b2_mask) == b2_patt) {
+                /* modified BEGIN */
+                assert(cur_max_ucs_size == 4);
+                *dst_ucs2++ = read_b2_unicode(uni);
+                src += 2;
+                uni = byte_load_4(src);
+                // if (likely(to_write >= 0x100)) {
+                //     // UCS2
+                //     // write
+                //     *dst_ucs2++ = to_write;
+                //     // move src and load
+                //     src += 2;
+                //     goto copy_utf8_ucs2;
+                //     // uni = byte_load_4(src);
+                // } else {
+                //     // write
+                //     *dst_ucs2++ = (u8)to_write;
+                //     // move src and load
+                //     src += 2;
+                //     // still ascii, no need goto
+                //     uni = byte_load_4(src);
+                // }
+                // code point: [U+0080, U+07FF], latin1 or ucs2
+                // byte_copy_2(dst, &uni);
+                // dst += 2;
+                /* modified END */
+            } else break;
+        })
+        while (true) repeat4({
+            if ((uni & b4_mask) == b4_patt) {
+                /* modified BEGIN */
+                // code point: [U+10000, U+10FFFF]
+                // must be ucs4
+                *dst_ucs4++ = read_b4_unicode(uni);
+                // byte_copy_4(dst, &uni);
+                // dst += 4;
+                src += 4;
+                goto copy_utf8_ucs4;
+                // uni = byte_load_4(src);
+                /* modified END */
+            } else break;
+        })
+
+        /* modified BEGIN */
+        // if (unlikely(pos == src)) {
+        //     if (!inv) return_err(src, "invalid UTF-8 encoding in string");
+        //     goto copy_ascii_stop_1;
+        // }
+        goto copy_ascii_ucs4;
+        /* modified END */
+    }
+    /* modified BEGIN */
+    goto copy_escape_ucs4;
+    /* modified END */
+    
+read_finalize:
+    if(unlikely(cur_max_ucs_size==4)) {
+        u32* start = (u32*)temp_string_buf + len_ucs1 + len_ucs2 - 1;
+        u16* ucs2_back = (u16*)temp_string_buf + len_ucs1 + len_ucs2 - 1;
+        u8* ucs1_back = (u8*)temp_string_buf + len_ucs1 - 1;
+        while (len_ucs2) {
+            *start-- = *ucs2_back--;
+            len_ucs2--;
+        }
+        while (len_ucs1) {
+            *start-- = *ucs1_back--;
+            len_ucs1--;
+        }
+        return create_py_unicode(temp_string_buf, dst_ucs4 - (u32*)temp_string_buf, false, 4);
+    } else if (unlikely(cur_max_ucs_size==2)) {
+        u16* start = (u16*)temp_string_buf + len_ucs1 - 1;
+        u8* ucs1_back = (u8*)temp_string_buf + len_ucs1 - 1;
+        while (len_ucs1) {
+            *start-- = *ucs1_back--;
+            len_ucs1--;
+        }
+        return create_py_unicode(temp_string_buf, dst_ucs2 - (u16*)temp_string_buf, false, 2);
+    } else {
+        return create_py_unicode(temp_string_buf, dst - (u8*)temp_string_buf, false, 1);
+    }
+
 #undef return_err
 #undef is_valid_seq_1
 #undef is_valid_seq_2
