@@ -5438,6 +5438,7 @@ skip_ascii_end:
         memcpy(temp_string_buf, src_start, src - src_start);
         len_ucs1 = src - src_start;
     }
+    goto copy_utf8_ucs1;
     /* modified END */
 
     /* modified BEGIN */    
@@ -5565,16 +5566,17 @@ copy_escape_ucs1:
         // return true;
         /* modified END */
     } else {
-        if (!inv) return_err(src, "unexpected control character in string");
-        if (src >= lst) return_err(src, "unclosed string");
         /* modified BEGIN */
-        // assert this is a ascii character
-        assert(!(*src & 0x80));
+        return_err(src, "unexpected control character in string");
+        // if (!inv) return_err(src, "unexpected control character in string");
+        // if (src >= lst) return_err(src, "unclosed string");
+        // *dst++ = *src++;
         /* modified END */
-        *dst++ = *src++;
     }
-    
-copy_ascii:
+
+    /* modified BEGIN */
+copy_ascii_ucs1:
+    /* modified END */
     /*
      Copy continuous ASCII, loop unrolling, same as the following code:
      
@@ -5586,11 +5588,15 @@ copy_ascii:
 #if YYJSON_IS_REAL_GCC
 #   define expr_jump(i) \
     if (likely(!(char_is_ascii_stop(src[i])))) {} \
-    else { __asm__ volatile("":"=m"(src[i])); goto copy_ascii_stop_##i; }
+    /* modified BEGIN */
+    else { __asm__ volatile("":"=m"(src[i])); goto copy_ascii_ucs1_stop_##i; }
+    /* modified END */
 #else
 #   define expr_jump(i) \
     if (likely(!(char_is_ascii_stop(src[i])))) {} \
-    else { goto copy_ascii_stop_##i; }
+    /* modified BEGIN */
+    else { goto copy_ascii_ucs1_stop_##i; }
+    /* modified END */
 #endif
     repeat16_incr(expr_jump)
 #undef expr_jump
@@ -5598,99 +5604,133 @@ copy_ascii:
     byte_move_16(dst, src);
     src += 16;
     dst += 16;
-    goto copy_ascii;
+    /* modified BEGIN */
+    goto copy_ascii_ucs1;
+    /* modified END */
     
     /*
      The memory will be moved forward by at least 1 byte. So the `byte_move`
      can be one byte more than needed to reduce the number of instructions.
      */
-copy_ascii_stop_0:
-    goto copy_utf8;
-copy_ascii_stop_1:
+    /* modified BEGIN */
+copy_ascii_ucs1_stop_0:
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_1:
+    /* modified END */
     byte_move_2(dst, src);
     src += 1;
     dst += 1;
-    goto copy_utf8;
-copy_ascii_stop_2:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_2:
+    /* modified END */
     byte_move_2(dst, src);
     src += 2;
     dst += 2;
-    goto copy_utf8;
-copy_ascii_stop_3:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_3:
+    /* modified END */
     byte_move_4(dst, src);
     src += 3;
     dst += 3;
-    goto copy_utf8;
-copy_ascii_stop_4:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_4:
+    /* modified END */
     byte_move_4(dst, src);
     src += 4;
     dst += 4;
-    goto copy_utf8;
-copy_ascii_stop_5:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_5:
+    /* modified END */
     byte_move_4(dst, src);
     byte_move_2(dst + 4, src + 4);
     src += 5;
     dst += 5;
-    goto copy_utf8;
-copy_ascii_stop_6:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_6:
+    /* modified END */
     byte_move_4(dst, src);
     byte_move_2(dst + 4, src + 4);
     src += 6;
     dst += 6;
-    goto copy_utf8;
-copy_ascii_stop_7:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_7:
+    /* modified END */
     byte_move_8(dst, src);
     src += 7;
     dst += 7;
-    goto copy_utf8;
-copy_ascii_stop_8:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_8:
+    /* modified END */
     byte_move_8(dst, src);
     src += 8;
     dst += 8;
-    goto copy_utf8;
-copy_ascii_stop_9:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_9:
+    /* modified END */
     byte_move_8(dst, src);
     byte_move_2(dst + 8, src + 8);
     src += 9;
     dst += 9;
-    goto copy_utf8;
-copy_ascii_stop_10:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_10:
+    /* modified END */
     byte_move_8(dst, src);
     byte_move_2(dst + 8, src + 8);
     src += 10;
     dst += 10;
-    goto copy_utf8;
-copy_ascii_stop_11:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_11:
+    /* modified END */
     byte_move_8(dst, src);
     byte_move_4(dst + 8, src + 8);
     src += 11;
     dst += 11;
-    goto copy_utf8;
-copy_ascii_stop_12:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_12:
+    /* modified END */
     byte_move_8(dst, src);
     byte_move_4(dst + 8, src + 8);
     src += 12;
     dst += 12;
-    goto copy_utf8;
-copy_ascii_stop_13:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_13:
+    /* modified END */
     byte_move_8(dst, src);
     byte_move_4(dst + 8, src + 8);
     byte_move_2(dst + 12, src + 12);
     src += 13;
     dst += 13;
-    goto copy_utf8;
-copy_ascii_stop_14:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_14:
+    /* modified END */
     byte_move_8(dst, src);
     byte_move_4(dst + 8, src + 8);
     byte_move_2(dst + 12, src + 12);
     src += 14;
     dst += 14;
-    goto copy_utf8;
-copy_ascii_stop_15:
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+copy_ascii_ucs1_stop_15:
+    /* modified END */
     byte_move_16(dst, src);
     src += 15;
     dst += 15;
-    goto copy_utf8;
+    /* modified BEGIN */
+    goto copy_utf8_ucs1;
+    /* modified END */
     
 copy_utf8:
     if (*src & 0x80) { /* non-ASCII character */
