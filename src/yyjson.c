@@ -5230,7 +5230,7 @@ static_inline u32 read_b4_unicode(u32 uni) {
 #if YYJSON_ENDIAN == YYJSON_BIG_ENDIAN
     return ((uni & 0x07000000) >> 6) | ((uni & 0x3f0000) >> 4) | ((uni & 0x3f00) >> 2)  | ((uni & 0x3f));
 #elif YYJSON_ENDIAN == YYJSON_LITTLE_ENDIAN
-    return ((uni & 0x07) << 18) | ((uni & 0x3f00) << 4) | ((uni & 0x3f0000) >> 10) | ((uni & 0x3f0000) >> 24);
+    return ((uni & 0x07) << 18) | ((uni & 0x3f00) << 4) | ((uni & 0x3f0000) >> 10) | ((uni & 0x3f000000) >> 24);
 #else
     #error "unsupported endian"
 #endif
