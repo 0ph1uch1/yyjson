@@ -5251,8 +5251,8 @@ static_inline u32 read_b4_unicode(u32 uni) {
  */
 static_inline bool read_string(u8 **ptr,
                                u8 *lst,
-                               bool inv,
                                /* modified */
+                                //    bool inv,
                                 //    yyjson_val *val,
                                 void* temp_string_buf,
                                /* modified */
