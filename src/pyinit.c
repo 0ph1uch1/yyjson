@@ -108,17 +108,17 @@ PyObject *pyyjson_Decode(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#", (char **)kwlist, &string, &len))
     {
         PyErr_SetString(JSONDecodeError, "Invalid argument");
-        goto fail;
+        return NULL;
     }
     // TODO
-    PyObject *root = yyjson_read(string, len, YYJSON_READ_NOFLAG);
+    yyjson_read_err err;
+    PyObject* root = yyjson_read_opts((char *)string,
+                            len, YYJSON_READ_NOFLAG & ~YYJSON_READ_INSITU, NULL, &err);
+    if(err.code)
+    {
+        PyErr_Format(PyExc_ValueError, "%s\n\tat %zu", err.msg, err.pos);
+        return NULL;
+    }
     assert(root);
     return root;
-
-fail:
-    if (!PyErr_Occurred())
-    {
-        PyErr_SetString(JSONDecodeError, "Failed to decode JSON");
-    }
-    return NULL;
 }
