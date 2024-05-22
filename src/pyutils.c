@@ -2,7 +2,6 @@
 
 PyObject* create_py_unicode(const char* str, Py_ssize_t len, int is_ascii, int kind)
 {
-    // TODO
     int max_char = 128;
     if(!is_ascii)
     {
@@ -19,18 +18,14 @@ PyObject* create_py_unicode(const char* str, Py_ssize_t len, int is_ascii, int k
             break;
         }
     }
-    PyObject* unicode;
-    if(max_char <= 0xff)
-    {
-        unicode = PyUnicode_New(len, max_char);
-        if(!unicode) goto alc_fail;
-        memcpy(PyUnicode_DATA(unicode), str, len);
-    }else
-    {
-        assert(0);
-    }
+    PyObject* unicode = PyUnicode_New(len, max_char);
+    if(!unicode) goto alc_fail;
+    memcpy(PyUnicode_DATA(unicode), str, len * kind);
+    // same as
+    // memcpy((unsigned char *) ((PyCompactUnicodeObject *) unicode + 1), str, len * kind);
     return unicode;
     alc_fail:
+    // TODO
     assert(0);
 
 }

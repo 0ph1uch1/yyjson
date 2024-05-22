@@ -6386,7 +6386,6 @@ doc_end:
     }
     
     // if (pre && *pre) **pre = '\0';
-    // TODO need to free
     // doc = (yyjson_doc *)val_hdr;
     // doc->root = val_hdr + hdr_len;
     // doc->alc = alc;
@@ -7345,7 +7344,7 @@ PyObject *yyjson_read_opts(char *dat,
         end = hdr + len * 5;
         cur = dat;
         // memcpy(hdr, dat, len);
-        memset(end, 0, len * 5);
+        memset(hdr, 0, len * 5);
     }
     
     /* skip empty contents before json document */
@@ -7399,6 +7398,7 @@ PyObject *yyjson_read_opts(char *dat,
             }
         }
         if (!has_read_flag(INSITU)) alc.free(alc.ctx, (void *)hdr);
+        else assert(0); // check free, removed after development phrase
     }
     return doc;
     
