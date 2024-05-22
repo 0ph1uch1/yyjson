@@ -5463,9 +5463,10 @@ skip_ascii_end:
         // *src = '\0';
         // *end = src + 1;
         // return true;
-    } else {
+    } else if(src != src_start){
         memcpy(temp_string_buf, src_start, src - src_start);
         len_ucs1 = src - src_start;
+        dst += len_ucs1;
     }
     goto copy_utf8_ucs1;
     /* modified END */
