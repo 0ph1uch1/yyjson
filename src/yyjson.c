@@ -5777,6 +5777,7 @@ copy_utf8_ucs1:
     assert(cur_max_ucs_size==1);
     /* modified END */
     if (*src & 0x80) { /* non-ASCII character */
+copy_utf8_inner_ucs1:
         pos = src;
         uni = byte_load_4(src);
         // TODO remove the repeat4 later
@@ -5796,7 +5797,7 @@ copy_utf8_ucs1:
                 // dst += 3;
                 // move src and load
                 src += 3;
-                goto copy_utf8_ucs2;
+                goto copy_utf8_inner_ucs2;
                 // uni = byte_load_4(src);
                 /* modified END */
             } else break;
@@ -5819,7 +5820,7 @@ copy_utf8_ucs1:
                     *dst_ucs2++ = to_write;
                     // move src and load
                     src += 2;
-                    goto copy_utf8_ucs2;
+                    goto copy_utf8_inner_ucs2;
                     // uni = byte_load_4(src);
                 } else {
                     is_ascii = false;
@@ -5851,7 +5852,7 @@ copy_utf8_ucs1:
                 // byte_copy_4(dst, &uni);
                 // dst += 4;
                 src += 4;
-                goto copy_utf8_ucs4;
+                goto copy_utf8_inner_ucs4;
                 // uni = byte_load_4(src);
                 /* modified END */
             } else break;
@@ -5983,6 +5984,7 @@ copy_utf8_ucs2:
     assert(cur_max_ucs_size==2);
     /* modified END */
     if (*src & 0x80) { /* non-ASCII character */
+copy_utf8_inner_ucs2:
         pos = src;
         uni = byte_load_4(src);
         // TODO remove the repeat4 later
@@ -6048,7 +6050,7 @@ copy_utf8_ucs2:
                 // byte_copy_4(dst, &uni);
                 // dst += 4;
                 src += 4;
-                goto copy_utf8_ucs4;
+                goto copy_utf8_inner_ucs4;
                 // uni = byte_load_4(src);
                 /* modified END */
             } else break;
@@ -6173,6 +6175,7 @@ copy_utf8_ucs4:
     assert(cur_max_ucs_size==4);
     /* modified END */
     if (*src & 0x80) { /* non-ASCII character */
+copy_utf8_inner_ucs4:
         pos = src;
         uni = byte_load_4(src);
         // TODO remove the repeat4 later
@@ -6231,8 +6234,8 @@ copy_utf8_ucs4:
                 // byte_copy_4(dst, &uni);
                 // dst += 4;
                 src += 4;
-                goto copy_utf8_ucs4;
-                // uni = byte_load_4(src);
+                // goto copy_utf8_ucs4;
+                uni = byte_load_4(src);
                 /* modified END */
             } else break;
         })
@@ -6333,7 +6336,7 @@ static_noinline PyObject *read_root_single(u8 *hdr,
     // if (unlikely(!val_hdr)) goto fail_alloc;
     // val = val_hdr + hdr_len;
     // raw = has_read_flag(NUMBER_AS_RAW) || has_read_flag(BIGNUM_AS_RAW);
-    inv = has_read_flag(ALLOW_INVALID_UNICODE) != 0;
+    // inv = has_read_flag(ALLOW_INVALID_UNICODE) != 0;
     // raw_end = NULL;
     // pre = raw ? &raw_end : NULL;
     
@@ -6343,7 +6346,7 @@ static_noinline PyObject *read_root_single(u8 *hdr,
         goto fail_number;
     }
     if (*cur == '"') {
-        PyObject* re = read_string(&cur, end, inv, hdr, &msg);
+        PyObject* re = read_string(&cur, end, false, hdr, &msg);
         // TODO
         if (likely(re)) return re;
         goto fail_string;
@@ -7344,7 +7347,7 @@ PyObject *yyjson_read_opts(char *dat,
         end = hdr + len * 5;
         cur = dat;
         // memcpy(hdr, dat, len);
-        memset(hdr, 0, len * 5);
+        // memset(hdr, 0, len * 5);
     }
     
     /* skip empty contents before json document */
