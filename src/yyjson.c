@@ -6200,7 +6200,7 @@ copy_utf8_inner_ucs4:
             if ((uni & b2_mask) == b2_patt) {
                 /* modified BEGIN */
                 assert(cur_max_ucs_size == 4);
-                *dst_ucs2++ = read_b2_unicode(uni);
+                *dst_ucs4++ = read_b2_unicode(uni);
                 src += 2;
                 uni = byte_load_4(src);
                 // if (likely(to_write >= 0x100)) {
