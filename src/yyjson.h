@@ -1038,7 +1038,7 @@ yyjson_api_inline size_t yyjson_read_max_memory_usage(size_t len,
     used in the conversion, NULL if an error occurs.
  */
 yyjson_api const char *yyjson_read_number(const char *dat,
-                                          yyjson_val *val,
+                                          PyObject **val,
                                           yyjson_read_flag flg,
                                           const yyjson_alc *alc,
                                           yyjson_read_err *err);
@@ -1064,13 +1064,13 @@ yyjson_api const char *yyjson_read_number(const char *dat,
  @return If successful, a pointer to the character after the last character
     used in the conversion, NULL if an error occurs.
  */
-yyjson_api_inline const char *yyjson_mut_read_number(const char *dat,
-                                                     yyjson_mut_val *val,
-                                                     yyjson_read_flag flg,
-                                                     const yyjson_alc *alc,
-                                                     yyjson_read_err *err) {
-    return yyjson_read_number(dat, (yyjson_val *)val, flg, alc, err);
-}
+// yyjson_api_inline const char *yyjson_mut_read_number(const char *dat,
+//                                                      yyjson_mut_val *val,
+//                                                      yyjson_read_flag flg,
+//                                                      const yyjson_alc *alc,
+//                                                      yyjson_read_err *err) {
+//     return yyjson_read_number(dat, (yyjson_val *)val, flg, alc, err);
+// }
 
 
 /*==============================================================================
@@ -4528,6 +4528,15 @@ struct yyjson_doc {
     /** The string pool used by JSON values (nullable). */
     char *str_pool;
 };
+
+
+   typedef struct py_yyjson_val
+   {
+      uint8_t tag;
+      PyObject* val;
+      struct py_yyjson_val *parent;
+      PyObject* key_temp;
+   } py_yyjson_val;
 
 
 
