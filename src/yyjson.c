@@ -6905,25 +6905,24 @@ static_inline PyObject *read_root_pretty(u8 *temp_buf,
     // yyjson_doc *doc; /* the JSON document, equals to val_hdr */
     PyObject* key_temp;
     PyObject* val_temp;
-    usize val_len = 0;
+    usize val_ofs = 0;
     const char *msg; /* error message */
-    
+
     bool raw; /* read number as raw */
     bool inv; /* allow invalid unicode */
     u8 *raw_end; /* raw end for null-terminator */
     // u8 **pre; /* previous raw end pointer */
-    
+
     // dat_len = has_read_flag(STOP_WHEN_DONE) ? 256 : (usize)(end - cur);
     // hdr_len = sizeof(yyjson_doc) / sizeof(yyjson_val);
     // hdr_len += (sizeof(yyjson_doc) % sizeof(yyjson_val)) > 0;
     // alc_max = USIZE_MAX / sizeof(yyjson_val);
     // alc_len = hdr_len + (dat_len / YYJSON_READER_ESTIMATED_PRETTY_RATIO) + 4;
     // alc_len = yyjson_min(alc_len, alc_max);
-    
+
     // val_hdr = (yyjson_val *)alc.malloc(alc.ctx, alc_len * sizeof(yyjson_val));
-    const size_t stack_buf_size = 1024;
+    static const size_t stack_buf_size = 1024;
     py_yyjson_val stack_buf[stack_buf_size];
-    size_t pydoc_buf_index = 0;
     val_hdr = (py_yyjson_val*) stack_buf;
     hdr_len = stack_buf_size;
     // val_end = hdr;
@@ -6938,28 +6937,26 @@ static_inline PyObject *read_root_pretty(u8 *temp_buf,
     inv = false;
     // raw_end = NULL;
     // pre = raw ? &raw_end : NULL;
-    
+
     if (*cur++ == '{') {
         // ctn->tag = YYJSON_TYPE_OBJ;
         // ctn->uni.ofs = 0;
-        val->parent = NULL;
         val->val = PyDict_New();
         if (*cur == '\n') cur++;
         goto obj_key_begin;
     } else {
         // ctn->tag = YYJSON_TYPE_ARR;
         // ctn->uni.ofs = 0;
-        val->parent = NULL;
         val->val = PyList_New(0);
         if (*cur == '\n') cur++;
         goto arr_val_begin;
     }
-    
+
 arr_begin:
     /* save current container */
     // ctn->tag = (((u64)ctn_len + 1) << YYJSON_TAG_BIT) |
     //            (ctn->tag & YYJSON_TAG_MASK);
-    
+
     /* create a new array value, save parent container offset */
     // val_incr();
     // val->tag = YYJSON_TYPE_ARR;
@@ -6967,11 +6964,14 @@ arr_begin:
     /* push the new array value as current container */
     // ctn = val;
     // ctn_len = 0;
-    val_hdr[++val_len].val = PyList_New(0);
-    val_hdr[val_len].parent = val;
-    val = val_hdr + val_len;
+    if((val_ofs + 1) * sizeof(py_yyjson_val) >= stack_buf_size)
+    {
+        val_hdr = alc.realloc(NULL, val_hdr, 1024, (end - cur) / 3 * sizeof(py_yyjson_val));
+    }
+    val_hdr[++val_ofs].val = PyList_New(0);
+    val = val_hdr + val_ofs;
     if (*cur == '\n') cur++;
-    
+
 arr_val_begin:
 #if YYJSON_IS_REAL_GCC
     while (true) repeat16({
@@ -6984,7 +6984,7 @@ arr_val_begin:
         else break;
     })
 #endif
-    
+
     if (*cur == '{') {
         cur++;
         goto obj_begin;
@@ -7069,7 +7069,7 @@ arr_val_begin:
     //     if (byte_match_2(cur, "/*")) goto fail_comment;
     // }
     goto fail_character_val;
-    
+
 arr_val_end:
     PyList_Append(val->val, val_temp);
 arr_val_end_skip_char:
@@ -7094,7 +7094,7 @@ arr_val_end_skip_char:
     //     if (byte_match_2(cur, "/*")) goto fail_comment;
     // }
     goto fail_character_arr_end;
-    
+
 arr_end:
     /* get parent container */
     // ctn_parent = (yyjson_val *)(void *)((u8 *)ctn - ctn->uni.ofs);
@@ -7107,22 +7107,22 @@ arr_end:
     // /* pop parent as current container */
     // ctn = ctn_parent;
     // ctn_len = (usize)(ctn->tag >> YYJSON_TAG_BIT);
-    if(val->parent == NULL)
+    if(val_ofs == 0)
     {
         goto doc_end;
     }
     if (*cur == '\n') cur++;
-    if (PyDict_Check(val->parent->val)) {
+    if (PyDict_Check(val_hdr[val_ofs - 1].val)) {
         val_temp = val->val;
-        val = val->parent;
+        val = val_hdr + --val_ofs;
         key_temp = val->key_temp;
         goto obj_val_end;
     } else {
         val_temp = val->val;
-        val = val->parent;
+        val = val_hdr + --val_ofs;
         goto arr_val_end;
     }
-    
+
 obj_begin:
     /* push container */
     // ctn->tag = (((u64)ctn_len + 1) << YYJSON_TAG_BIT) |
@@ -7133,8 +7133,11 @@ obj_begin:
     // val->uni.ofs = (usize)((u8 *)val - (u8 *)ctn);
     // ctn = val;
     // ctn_len = 0;
-    val_hdr[++val_len].parent = val;
-    val = val_hdr + val_len;
+    if((val_ofs + 1) * sizeof(py_yyjson_val) >= stack_buf_size)
+    {
+        val_hdr = alc.realloc(NULL, val_hdr, 1024, (end - cur) / 3 * sizeof(py_yyjson_val));
+    }
+    val = val_hdr + ++val_ofs;
     val->val = PyDict_New();
     if (*cur == '\n') cur++;
     key_temp = NULL;
@@ -7309,19 +7312,19 @@ obj_end:
     // if (unlikely(ctn == ctn_parent)) goto doc_end;
     // ctn = ctn_parent;
     // ctn_len = (usize)(ctn->tag >> YYJSON_TAG_BIT);
-    if(val->parent == NULL)
+    if(val_ofs == 0)
     {
         goto doc_end;
     }
     if (*cur == '\n') cur++;
-    if (PyDict_Check(val->parent->val)) {
+    if (PyDict_Check(val_hdr[val_ofs - 1].val)) {
         val_temp = val->val;
-        val = val->parent;
+        val = val_hdr + --val_ofs;
         key_temp = val->key_temp;
         goto obj_val_end;
     } else {
         val_temp = val->val;
-        val = val->parent;
+        val = val_hdr + --val_ofs;
         goto arr_val_end;
     }
     
