@@ -886,7 +886,7 @@ yyjson_api bool yyjson_locate_pos(const char *str, size_t len, size_t pos,
  */
 yyjson_api PyObject *yyjson_read_opts(char *dat,
                                         size_t len,
-                                        yyjson_read_flag flg,
+                                        //yyjson_read_flag flg,
                                         const yyjson_alc *alc,
                                         yyjson_read_err *err);
 
@@ -956,7 +956,7 @@ yyjson_api_inline PyObject *yyjson_read(const char *dat,
                                           yyjson_read_flag flg) {
     flg &= ~YYJSON_READ_INSITU; /* const string cannot be modified */
     return yyjson_read_opts((char *)(void *)(size_t)(const void *)dat,
-                            len, flg, NULL, NULL);
+                            len, NULL, NULL);
 }
 
 /**

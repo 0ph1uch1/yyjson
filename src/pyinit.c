@@ -113,7 +113,7 @@ PyObject *pyyjson_Decode(PyObject *self, PyObject *args, PyObject *kwargs)
     // TODO
     yyjson_read_err err;
     PyObject* root = yyjson_read_opts((char *)string,
-                            len, (YYJSON_READ_NOFLAG | YYJSON_READ_ALLOW_INF_AND_NAN) & ~YYJSON_READ_INSITU, NULL, &err);
+                            len, NULL, &err);
     if(err.code)
     {
         PyErr_Format(PyExc_ValueError, "%s\n\tat %zu", err.msg, err.pos);
