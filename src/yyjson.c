@@ -6372,8 +6372,9 @@ static_noinline PyObject *read_root_single(u8 *temp_buf,
         goto fail_literal_false;
     }
     if (*cur == 'n') {
-        assert(false);
-        // if (likely(read_null(&cur, val))) goto doc_end;
+        // assert(false);
+        PyObject *val_temp = NULL;
+        if (likely(read_null(&cur, &val_temp))) Py_RETURN_NONE;
         // if (has_read_flag(ALLOW_INF_AND_NAN)) {
         //     if (read_nan(false, &cur, pre, val)) goto doc_end;
         // }
@@ -7038,14 +7039,14 @@ arr_val_begin:
         goto fail_literal_false;
     }
     if (*cur == 'n') {
-        assert(0);
+        // assert(0);
         // val_incr();
         // ctn_len++;
-        // if (likely(read_null(&cur, val))) goto arr_val_end;
+        if (likely(read_null(&cur, &val_temp))) goto arr_val_end;
         // if (has_read_flag(ALLOW_INF_AND_NAN)) {
         //     if (read_nan(false, &cur, pre, val)) goto arr_val_end;
         // }
-        // goto fail_literal_null;
+        goto fail_literal_null;
     }
     if (*cur == ']') {
         cur++;
