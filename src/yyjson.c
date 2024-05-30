@@ -6942,7 +6942,6 @@ static_inline PyObject *read_root_pretty(u8 *temp_buf,
     if (*cur++ == '{') {
         // ctn->tag = YYJSON_TYPE_OBJ;
         // ctn->uni.ofs = 0;
-        val->tag = YYJSON_TYPE_OBJ;
         val->parent = NULL;
         val->val = PyDict_New();
         if (*cur == '\n') cur++;
@@ -6950,7 +6949,6 @@ static_inline PyObject *read_root_pretty(u8 *temp_buf,
     } else {
         // ctn->tag = YYJSON_TYPE_ARR;
         // ctn->uni.ofs = 0;
-        val->tag = YYJSON_TYPE_ARR;
         val->parent = NULL;
         val->val = PyList_New(0);
         if (*cur == '\n') cur++;
@@ -6972,7 +6970,6 @@ arr_begin:
     val_hdr[++val_len].val = PyList_New(0);
     val_hdr[val_len].parent = val;
     val = val_hdr + val_len;
-    val->tag = YYJSON_TYPE_ARR;
     if (*cur == '\n') cur++;
     
 arr_val_begin:
@@ -7115,7 +7112,7 @@ arr_end:
         goto doc_end;
     }
     if (*cur == '\n') cur++;
-    if ((val->parent->tag & YYJSON_TYPE_MASK) == YYJSON_TYPE_OBJ) {
+    if (PyDict_Check(val->parent->val)) {
         val_temp = val->val;
         val = val->parent;
         key_temp = val->key_temp;
@@ -7138,7 +7135,6 @@ obj_begin:
     // ctn_len = 0;
     val_hdr[++val_len].parent = val;
     val = val_hdr + val_len;
-    val->tag = YYJSON_TYPE_OBJ;
     val->val = PyDict_New();
     if (*cur == '\n') cur++;
     key_temp = NULL;
@@ -7318,7 +7314,7 @@ obj_end:
         goto doc_end;
     }
     if (*cur == '\n') cur++;
-    if ((val->parent->tag & YYJSON_TYPE_MASK) == YYJSON_TYPE_OBJ) {
+    if (PyDict_Check(val->parent->val)) {
         val_temp = val->val;
         val = val->parent;
         key_temp = val->key_temp;
@@ -7461,12 +7457,12 @@ PyObject *yyjson_read_opts(char *dat,
     
     /* read json document */
     if (likely(char_is_container(*cur))) {
-        if (char_is_space(cur[1]) && char_is_space(cur[2])) {
+        // if (char_is_space(cur[1]) && char_is_space(cur[2])) {
             doc = read_root_pretty(temp_buf, cur, end, alc, err);
-        } else {
-            assert(false);
+        // } else {
+            // assert(false);
             // doc = read_root_minify(hdr, cur, end, alc, flg, err);
-        }
+        // }
     } else {
         doc = read_root_single(temp_buf, cur, end, alc, err);
     }

@@ -4532,7 +4532,6 @@ struct yyjson_doc {
 
    typedef struct py_yyjson_val
    {
-      uint8_t tag;
       PyObject* val;
       struct py_yyjson_val *parent;
       PyObject* key_temp;
