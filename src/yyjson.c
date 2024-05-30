@@ -6301,26 +6301,26 @@ read_finalize:
  *============================================================================*/
 
 /** Read single value JSON document. */
-static_noinline PyObject *read_root_single(u8 *hdr,
+static_noinline PyObject *read_root_single(u8 *temp_buf,
                                              u8 *cur,
-                                             u8 *end,
+                                             u8 *const end,
                                              yyjson_alc alc,
                                              //yyjson_read_flag flg,
                                              yyjson_read_err *err) {
     
 #define return_err(_pos, _code, _msg) do { \
-    if (is_truncated_end(hdr, _pos, end, YYJSON_READ_ERROR_##_code)) { \
-        err->pos = (usize)(end - hdr); \
+    if (is_truncated_end(start_ptr, _pos, end, YYJSON_READ_ERROR_##_code)) { \
+        err->pos = (usize)(end - start_ptr); \
         err->code = YYJSON_READ_ERROR_UNEXPECTED_END; \
         err->msg = "unexpected end of data"; \
     } else { \
-        err->pos = (usize)(_pos - hdr); \
+        err->pos = (usize)(_pos - start_ptr); \
         err->code = YYJSON_READ_ERROR_##_code; \
         err->msg = _msg; \
     } \
     return NULL; \
 } while (false)
-    
+    u8* const start_ptr = cur;
     // usize hdr_len; /* value count used by doc */
     // usize alc_num; /* value count capacity */
     // yyjson_val *val_hdr; /* the head of allocated values */
@@ -6354,7 +6354,7 @@ static_noinline PyObject *read_root_single(u8 *hdr,
         goto fail_number;
     }
     if (*cur == '"') {
-        PyObject* re = read_string(&cur, end, false, hdr, &msg);
+        PyObject* re = read_string(&cur, end, false, temp_buf, &msg);
         // TODO
         if (likely(re)) return re;
         goto fail_string;
@@ -6855,7 +6855,7 @@ fail_garbage:
 // }
 
 /** Read JSON document (accept all style, but optimized for pretty). */
-static_inline PyObject *read_root_pretty(u8 *hdr,
+static_inline PyObject *read_root_pretty(u8 *temp_buf,
                                            u8 *cur,
                                            u8 *end,
                                            yyjson_alc alc,
@@ -6863,18 +6863,18 @@ static_inline PyObject *read_root_pretty(u8 *hdr,
                                            yyjson_read_err *err) {
     
 #define return_err(_pos, _code, _msg) do { \
-    if (is_truncated_end(hdr, _pos, end, YYJSON_READ_ERROR_##_code)) { \
-        err->pos = (usize)(end - hdr); \
+    if (is_truncated_end(start_ptr, _pos, end, YYJSON_READ_ERROR_##_code)) { \
+        err->pos = (usize)(end - start_ptr); \
         err->code = YYJSON_READ_ERROR_UNEXPECTED_END; \
         err->msg = "unexpected end of data"; \
     } else { \
-        err->pos = (usize)(_pos - hdr); \
+        err->pos = (usize)(_pos - start_ptr); \
         err->code = YYJSON_READ_ERROR_##_code; \
         err->msg = _msg; \
     } \
     return NULL; \
 } while (false)
-    
+    u8 *const start_ptr = cur;
 // #define val_incr() do { \
 //     val++; \
 //     if (unlikely(val >= val_end)) { \
@@ -6898,7 +6898,7 @@ static_inline PyObject *read_root_pretty(u8 *hdr,
     // usize alc_max; /* maximum value count for allocator */
     // usize ctn_len; /* the number of elements in current container */
     py_yyjson_val *val_hdr; /* the head of allocated values */
-    py_yyjson_val *val_end; /* the end of allocated values */
+    // py_yyjson_val *val_end; /* the end of allocated values */
     // yyjson_val *val_tmp; /* temporary pointer for realloc */
     py_yyjson_val *val; /* current JSON value */
     // py_yyjson_val *ctn; /* current container */
@@ -6922,9 +6922,12 @@ static_inline PyObject *read_root_pretty(u8 *hdr,
     // alc_len = yyjson_min(alc_len, alc_max);
     
     // val_hdr = (yyjson_val *)alc.malloc(alc.ctx, alc_len * sizeof(yyjson_val));
-    val_hdr = (py_yyjson_val*) hdr;
-    hdr_len = (size_t)end - (size_t)cur;
-    val_end = val_hdr + hdr_len;
+    const size_t stack_buf_size = 1024;
+    py_yyjson_val stack_buf[stack_buf_size];
+    size_t pydoc_buf_index = 0;
+    val_hdr = (py_yyjson_val*) stack_buf;
+    hdr_len = stack_buf_size;
+    // val_end = hdr;
     // if (unlikely(!val_hdr)) goto fail_alloc;
     // val_end = val_hdr + (alc_len - 2); /* padding for key-value pair reading */
 
@@ -7004,7 +7007,7 @@ arr_val_begin:
     if (*cur == '"') {
         // val_incr();
         // ctn_len++;
-        val_temp = read_string(&cur, end, inv, val_end, &msg);
+        val_temp = read_string(&cur, end, inv, temp_buf, &msg);
         if (likely(val_temp))
         {
             goto arr_val_end;
@@ -7152,7 +7155,7 @@ obj_key_begin:
     if (likely(*cur == '"')) {
         // val_incr();
         // ctn_len++;
-        key_temp = read_string(&cur, end, inv, val_end, &msg);
+        key_temp = read_string(&cur, end, inv, temp_buf, &msg);
         if (likely(key_temp)) goto obj_key_end;
         goto fail_string;
     }
@@ -7196,7 +7199,7 @@ obj_val_begin:
     if (*cur == '"') {
         // val++;
         // ctn_len++;
-        val_temp = read_string(&cur, end, inv, val_end, &msg);
+        val_temp = read_string(&cur, end, inv, temp_buf, &msg);
         if (likely(val_temp))
         {
             goto obj_val_end;
@@ -7403,14 +7406,14 @@ PyObject *yyjson_read_opts(char *dat,
     err->pos = (usize)(_pos); \
     err->msg = _msg; \
     err->code = YYJSON_READ_ERROR_##_code; \
-    alc.free(alc.ctx, (void *)hdr); \
+    alc.free(alc.ctx, (void *)temp_buf); \
     return NULL; \
 } while (false)
     
     yyjson_read_err dummy_err;
     yyjson_alc alc;
     PyObject *doc;
-    u8 *hdr = NULL, *end, *cur;
+    u8 *temp_buf = NULL, *end, *cur;
     
     /* validate input parameters */
     if (!err) err = &dummy_err;
@@ -7431,8 +7434,8 @@ PyObject *yyjson_read_opts(char *dat,
     if (unlikely(len >= USIZE_MAX - YYJSON_PADDING_SIZE)) {
         return_err(0, MEMORY_ALLOCATION, "memory allocation failed");
     }
-    hdr = (u8 *)alc.malloc(alc.ctx, len * 4 + len * sizeof(py_yyjson_val));
-    if (unlikely(!hdr)) {
+    temp_buf = (u8 *)alc.malloc(alc.ctx, len * 4);
+    if (unlikely(!temp_buf)) {
         return_err(0, MEMORY_ALLOCATION, "memory allocation failed");
     }
     end = dat + len;
@@ -7452,16 +7455,16 @@ PyObject *yyjson_read_opts(char *dat,
     /* read json document */
     if (likely(char_is_container(*cur))) {
         if (char_is_space(cur[1]) && char_is_space(cur[2])) {
-            doc = read_root_pretty(hdr, cur, end, alc, err);
+            doc = read_root_pretty(temp_buf, cur, end, alc, err);
         } else {
             assert(false);
             // doc = read_root_minify(hdr, cur, end, alc, flg, err);
         }
     } else {
-        doc = read_root_single(hdr, cur, end, alc, err);
+        doc = read_root_single(temp_buf, cur, end, alc, err);
     }
 
-    alc.free(alc.ctx, (void *)hdr);
+    alc.free(alc.ctx, (void *)temp_buf);
     
     /* check result */
     if (likely(doc)) {
