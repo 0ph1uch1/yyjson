@@ -6367,9 +6367,7 @@ static_noinline PyObject *read_root_single(u8 *temp_buf,
     if (*cur == 'f') {
         if (likely(read_false(&cur)))
         {
-            PyObject* re = Py_False;
-            Py_INCREF(re);
-            return re;
+            Py_RETURN_FALSE;
         }
         goto fail_literal_false;
     }
@@ -6398,7 +6396,7 @@ doc_end:
         //         if (byte_match_2(cur, "/*")) goto fail_comment;
         //     }
         // } else {
-            
+
         // }
         while (char_is_space(*cur)) cur++;
         if (unlikely(cur < end)) goto fail_garbage;
@@ -6998,11 +6996,14 @@ arr_val_begin:
         goto arr_begin;
     }
     if (char_is_number(*cur)) {
-        assert(0);
         // val_incr();
         // ctn_len++;
         // if (likely(read_number(&cur, pre, flg, val, &msg))) goto arr_val_end;
-        // goto fail_number;
+        if (likely(read_number(&cur, NULL, &val_temp, &msg)))
+        {
+            goto arr_val_end;
+        }
+        goto fail_number;
     }
     if (*cur == '"') {
         // val_incr();
@@ -7048,10 +7049,10 @@ arr_val_begin:
     }
     if (*cur == ']') {
         cur++;
-        // if (likely(ctn_len == 0)) goto arr_end;
+        goto arr_end;
         // if (has_read_flag(ALLOW_TRAILING_COMMAS)) goto arr_end;
-        while (*cur != ',') cur--;
-        goto fail_trailing_comma;
+        // while (*cur != ',') cur--;
+        // goto fail_trailing_comma;
     }
     if (char_is_space(*cur)) {
         while (char_is_space(*++cur));
@@ -7139,7 +7140,8 @@ obj_begin:
     val->tag = YYJSON_TYPE_OBJ;
     val->val = PyDict_New();
     if (*cur == '\n') cur++;
-    
+    key_temp = NULL;
+
 obj_key_begin:
 #if YYJSON_IS_REAL_GCC
     while (true) repeat16({
@@ -7161,10 +7163,10 @@ obj_key_begin:
     }
     if (likely(*cur == '}')) {
         cur++;
-        // if (likely(ctn_len == 0)) goto obj_end;
+        goto obj_end;
         // if (has_read_flag(ALLOW_TRAILING_COMMAS)) goto obj_end;
-        while (*cur != ',') cur--;
-        goto fail_trailing_comma;
+        // while (*cur != ',') cur--;
+        // goto fail_trailing_comma;
     }
     if (char_is_space(*cur)) {
         while (char_is_space(*++cur));
@@ -7207,11 +7209,15 @@ obj_val_begin:
         goto fail_string;
     }
     if (char_is_number(*cur)) {
-        assert(0);
+        // assert(0);
         // val++;
         // ctn_len++;
+        if (likely(read_number(&cur, NULL, &val_temp, &msg)))
+        {
+            goto obj_val_end;
+        }
         // if (likely(read_number(&cur, pre, flg, val, &msg))) goto obj_val_end;
-        // goto fail_number;
+        goto fail_number;
     }
     if (*cur == '{') {
         cur++;
@@ -7246,14 +7252,14 @@ obj_val_begin:
         goto fail_literal_false;
     }
     if (*cur == 'n') {
-        assert(0);
+        // assert(0);
         // val++;
         // ctn_len++;
-        // if (likely(read_null(&cur, val))) goto obj_val_end;
+        if (likely(read_null(&cur, &val_temp))) goto obj_val_end;
         // if (has_read_flag(ALLOW_INF_AND_NAN)) {
         //     if (read_nan(false, &cur, pre, val)) goto obj_val_end;
         // }
-        // goto fail_literal_null;
+        goto fail_literal_null;
     }
     if (char_is_space(*cur)) {
         while (char_is_space(*++cur));
@@ -7329,7 +7335,7 @@ doc_end:
         //     skip_spaces_and_comments(&cur);
         //     if (byte_match_2(cur, "/*")) goto fail_comment;
         // } else {
-            
+
         // }
         while (char_is_space(*cur)) cur++;
         if (unlikely(cur < end)) goto fail_garbage;
@@ -7430,7 +7436,7 @@ PyObject *yyjson_read_opts(char *dat,
     }
     
     /* add 4-byte zero padding for input data if necessary */
-    
+
     if (unlikely(len >= USIZE_MAX - YYJSON_PADDING_SIZE)) {
         return_err(0, MEMORY_ALLOCATION, "memory allocation failed");
     }
@@ -7443,7 +7449,7 @@ PyObject *yyjson_read_opts(char *dat,
     
     /* skip empty contents before json document */
     if (unlikely(char_is_space_or_comment(*cur))) {
-        
+
         if (likely(char_is_space(*cur))) {
             while (char_is_space(*++cur));
         }
