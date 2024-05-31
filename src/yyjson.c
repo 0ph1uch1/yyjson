@@ -6892,7 +6892,7 @@ static_inline PyObject *read_root_pretty(u8 *temp_buf,
 // } while (false)
     
     // usize dat_len; /* data length in bytes, hint for allocator */
-    usize hdr_len; /* value count used by yyjson_doc */
+    // usize hdr_len; /* value count used by yyjson_doc */
     // usize alc_len; /* value count allocated */
     // usize alc_max; /* maximum value count for allocator */
     // usize ctn_len; /* the number of elements in current container */
@@ -6908,9 +6908,9 @@ static_inline PyObject *read_root_pretty(u8 *temp_buf,
     usize val_ofs = 0;
     const char *msg; /* error message */
 
-    bool raw; /* read number as raw */
+    // bool raw; /* read number as raw */
     bool inv; /* allow invalid unicode */
-    u8 *raw_end; /* raw end for null-terminator */
+    // u8 *raw_end; /* raw end for null-terminator */
     // u8 **pre; /* previous raw end pointer */
 
     // dat_len = has_read_flag(STOP_WHEN_DONE) ? 256 : (usize)(end - cur);
@@ -6924,7 +6924,7 @@ static_inline PyObject *read_root_pretty(u8 *temp_buf,
     static const size_t stack_buf_size = 1024;
     py_yyjson_val stack_buf[stack_buf_size];
     val_hdr = (py_yyjson_val*) stack_buf;
-    hdr_len = stack_buf_size;
+    // hdr_len = stack_buf_size;
     // val_end = hdr;
     // if (unlikely(!val_hdr)) goto fail_alloc;
     // val_end = val_hdr + (alc_len - 2); /* padding for key-value pair reading */
@@ -6933,7 +6933,7 @@ static_inline PyObject *read_root_pretty(u8 *temp_buf,
     val = val_hdr;
     // ctn = val;
     // ctn_len = 0;
-    raw = 0;
+    // raw = 0;
     inv = false;
     // raw_end = NULL;
     // pre = raw ? &raw_end : NULL;
@@ -6964,7 +6964,7 @@ arr_begin:
     /* push the new array value as current container */
     // ctn = val;
     // ctn_len = 0;
-    if((val_ofs + 1) * sizeof(py_yyjson_val) >= stack_buf_size)
+    if(val_ofs + 1 >= stack_buf_size)
     {
         val_hdr = alc.realloc(NULL, val_hdr, 1024, (end - cur) / 3 * sizeof(py_yyjson_val));
     }
@@ -7133,7 +7133,7 @@ obj_begin:
     // val->uni.ofs = (usize)((u8 *)val - (u8 *)ctn);
     // ctn = val;
     // ctn_len = 0;
-    if((val_ofs + 1) * sizeof(py_yyjson_val) >= stack_buf_size)
+    if(val_ofs + 1 >= stack_buf_size)
     {
         val_hdr = alc.realloc(NULL, val_hdr, 1024, (end - cur) / 3 * sizeof(py_yyjson_val));
     }
